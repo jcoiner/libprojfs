@@ -55,6 +55,8 @@ static int test_handle_event(const char *desc, const char *path,
 	if ((ret_flags & TEST_VAL_SET) == TEST_VAL_UNSET)
 		ret = PrjFS_Result_Success;
 
+	test_free_opts();
+
 	return ret;
 }
 

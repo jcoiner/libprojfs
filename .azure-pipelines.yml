@@ -1,15 +1,82 @@
-# Starter pipeline
-# Start with a minimal pipeline that you can customize to build and deploy your code.
-# Add steps that build, run tests, deploy, and more:
-# https://aka.ms/yaml
-
-pool:
-  vmImage: 'Ubuntu-16.04'
-
-steps:
-- task: UseRubyVersion@0
-  inputs:
-    versionSpec: '>= 2.5'
-
-- script: docker/cibuild
-  displayName: 'Run cibuild'
+name: $(BuildDefinitionName).$(Date:yyyy-MM-dd).$(Rev:rr)
+variables:
+- group: github-ssh-keys
+jobs:
+- job: ci_build
+  displayName: CI and PR Builds
+  condition: ne(variables['Build.SourceBranch'], 'refs/heads/api-docs')
+  pool:
+    vmImage: 'ubuntu-16.04'
+  steps:
+  - task: UseRubyVersion@0
+    inputs:
+      versionSpec: '>= 2.5'
+  - script: docker/cibuild
+    name: run_cibuild
+    displayName: 'Run CI Build'
+    env:
+      BUILD_NAME: $(Build.BuildNumber)
+- job: api_doc_build
+  displayName: API Documentation Build
+  dependsOn: ci_build
+  condition: and(succeeded(),
+                 eq(variables['Build.SourceBranch'], 'refs/heads/master'))
+  pool:
+    vmImage: 'ubuntu-16.04'
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '>= 3.7'
+  - script: sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq &&
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq
+              --no-install-recommends doxygen
+    name: install_doxygen
+    displayName: 'Install Doxygen'
+  - script: doxygen docs/Doxyfile
+    name: run_doxygen
+    displayName: 'Run Doxygen'
+  - script: for xml in $(find docs/api/xml -name '*.xml' |
+                         grep -v '\(/dir\|off__t__must\)');
+            do
+              echo "converting $xml ..." &&
+              md=$(echo "$xml" | sed 's/\.xml$/.md/' | sed 's/\/xml//') &&
+              docs/xml2markdown.py -f "$xml" > "$md";
+            done &&
+            rm -rf docs/api/latex &&
+            mv docs/api/index.md docs/api/README.md
+    name: convert_xml2md
+    displayName: 'Convert XML to Markdown'
+  - task: DownloadSecureFile@1
+    inputs:
+      secureFile: github.libprojfs.key
+  - script: git config --global user.name 'Azure Pipelines' &&
+            git config --global user.email 'dev@dev.azure.com' &&
+            git stash push -u -- docs/api &&
+            git clean -xdf &&
+            git checkout -q api-docs &&
+            rm -rf docs/api &&
+            git stash pop -q &&
+            git diff --quiet;
+            if test $? -eq 0;
+            then
+              echo 'No API changes';
+            else
+              git add docs/api &&
+              MASTER_COMMIT=$(git log -1 --format='%h %s' origin/master) &&
+              git commit -m "API docs for $MASTER_COMMIT" &&
+              mkdir -p ~/.ssh &&
+              chmod 0700 ~/.ssh &&
+              chmod 0400 "$SECURE_TMP/github.libprojfs.key" &&
+              echo 'Host github.com' > ~/.ssh/config &&
+              echo "  IdentityFile $SECURE_TMP/github.libprojfs.key" >>
+                ~/.ssh/config &&
+              echo "$GITHUB_PUB" > ~/.ssh/known_hosts &&
+              git remote add ssh_origin
+                git@github.com:github/libprojfs.git &&
+              git push ssh_origin api-docs;
+            fi
+    name: push_md
+    displayName: 'Push Markdown'
+    env:
+      GITHUB_PUB: $(github.pub)
+      SECURE_TMP: $(Agent.TempDirectory)

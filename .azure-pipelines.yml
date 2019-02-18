@@ -24,28 +24,23 @@ jobs:
   pool:
     vmImage: 'ubuntu-16.04'
   steps:
-  - task: UsePythonVersion@0
+  - task: NodeTool@0
     inputs:
-      versionSpec: '>= 3.7'
+      versionSpec: '>= 10.x'
   - script: sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq &&
             sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq
               --no-install-recommends doxygen
     name: install_doxygen
     displayName: 'Install Doxygen'
-  - script: doxygen docs/Doxyfile
+  - script: npm install moxygen -g
+    name: install_moxygen
+    displayName: 'Install Moxygen'
+  - script: doxygen docs/.Doxyfile
     name: run_doxygen
     displayName: 'Run Doxygen'
-  - script: for xml in $(find docs/api/xml -name '*.xml' |
-                         grep -v '\(/dir\|off__t__must\)');
-            do
-              echo "converting $xml ..." &&
-              md=$(echo "$xml" | sed 's/\.xml$/.md/' | sed 's/\/xml//') &&
-              docs/xml2markdown.py -f "$xml" > "$md";
-            done &&
-            rm -rf docs/api/latex &&
-            mv docs/api/index.md docs/api/README.md
-    name: convert_xml2md
-    displayName: 'Convert XML to Markdown'
+  - script: moxygen -a -o docs/api/README.md docs/api/xml
+    name: run_moxygen
+    displayName: 'Run Moxygen'
   - task: DownloadSecureFile@1
     inputs:
       secureFile: github.libprojfs.key

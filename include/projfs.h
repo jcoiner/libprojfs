@@ -158,9 +158,11 @@ int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
 	!defined __cplusplus
 _Static_assert(sizeof(off_t) == 8, "projfs: off_t must be 64bit");
 #else
+/** @cond DUMMY */
 struct _projfs_off_t_must_be_64bit_dummy_struct {
 	unsigned _projfs_off_t_must_be_64bit:((sizeof(off_t) == 8) ? 1 : -1);
 };
+/** @endcond */
 #endif
 
 #endif /* PROJFS_H */

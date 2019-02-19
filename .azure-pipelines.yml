@@ -38,7 +38,7 @@ jobs:
   - script: doxygen docs/.Doxyfile
     name: run_doxygen
     displayName: 'Run Doxygen'
-  - script: moxygen -a -o docs/api/README.md docs/api/xml
+  - script: moxygen -h -o docs/api/README.md docs/api/xml
     name: run_moxygen
     displayName: 'Run Moxygen'
   - task: DownloadSecureFile@1

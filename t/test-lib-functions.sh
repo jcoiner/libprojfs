@@ -754,6 +754,17 @@ projfs_start () {
 	trap projfs_stop EXIT
 }
 
+projfs_run_twice () {
+	"$@" &
+	pidA="$!"
+	"$@" &
+	pidB="$!"
+	wait $pidA
+	echo $?
+	wait $pidB
+	echo $?
+}
+
 # Stop the projected filesystem command that was started by projfs_start()
 # and wait for its umount operation to be completed.
 projfs_stop () {

@@ -196,7 +196,8 @@ static int get_path_userdata(struct node_userdata *user,
 	wait_ms = PROJ_WAIT_MSEC;
 
 retry_flock:
-	err = flock(user->fd, LOCK_EX | LOCK_NB);
+	//err = flock(user->fd, LOCK_EX | LOCK_NB);
+	err = 0;
 	if (err == -1) {
 		if (errno == EWOULDBLOCK && wait_ms > 0) {
 			/* sleep 100ms, retry */

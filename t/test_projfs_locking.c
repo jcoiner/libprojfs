@@ -23,56 +23,33 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "test_common.h"
 
-static int test_handle_event(struct projfs_event *event, const char *desc,
-			     int proj, int perm)
-{
-	unsigned int opt_flags, ret_flags;
-	const char *retfile;
-	int ret;
-
-	opt_flags = test_get_opts((TEST_OPT_RETVAL | TEST_OPT_RETFILE),
-				  &ret, &ret_flags, &retfile);
-
-	if ((opt_flags & TEST_OPT_RETFILE) == TEST_OPT_NONE ||
-	    (ret_flags & TEST_FILE_EXIST) != TEST_FILE_NONE) {
-		printf("  test %s for %s: "
-		       "0x%04" PRIx64 "-%08" PRIx64 ", %d\n",
-		       desc, event->path,
-		       event->mask >> 32, event->mask & 0xFFFFFFFF,
-		       event->pid);
-	}
-
-	if (proj) {
-		if ((event->mask & ~PROJFS_ONDIR) != PROJFS_CREATE_SELF) {
-			fprintf(stderr, "unknown projection flags\n");
-			ret = -EINVAL;
-		}
-	}
-
-	if ((ret_flags & TEST_VAL_SET) == TEST_VAL_UNSET)
-		ret = perm ? PROJFS_ALLOW : 0;
-	else if (!perm && ret > 0)
-		ret = 0;
-
-	return ret;
-}
+#define LOCKFILE "test_projfs_locking.lock"
 
 static int test_proj_event(struct projfs_event *event)
 {
-	return test_handle_event(event, "projection request", 1, 0);
-}
+	int fd, res;
 
-static int test_notify_event(struct projfs_event *event)
-{
-	return test_handle_event(event, "event notification", 0, 0);
-}
+	if (event->mask != (PROJFS_CREATE_SELF | PROJFS_ONDIR))
+		return -EINVAL;
 
-static int test_perm_event(struct projfs_event *event)
-{
-	return test_handle_event(event, "permission request", 0, 1);
+	fd = open(LOCKFILE, (O_CREAT | O_EXCL | O_RDWR), 0600);
+	if (fd == -1 && errno == EEXIST)
+		return -EEXIST;
+	else if (fd == -1)
+		return -EINVAL;
+
+	sleep(1);
+	close(fd);
+
+	res = unlink(LOCKFILE);
+	if (res == -1)
+		return -EINVAL;
+
+	return 0;
 }
 
 int main(int argc, char *const argv[])
@@ -81,13 +58,12 @@ int main(int argc, char *const argv[])
 	struct projfs *fs;
 	struct projfs_handlers handlers = { 0 };
 
-	test_parse_mount_opts(argc, argv,
-			      (TEST_OPT_RETVAL | TEST_OPT_RETFILE),
-			      &lower_path, &mount_path);
+	test_parse_mount_opts(argc, argv, 0, &lower_path, &mount_path);
 
 	handlers.handle_proj_event = &test_proj_event;
-	handlers.handle_notify_event = &test_notify_event;
-	handlers.handle_perm_event = &test_perm_event;
+
+	/* unlink if exists */
+	unlink(LOCKFILE);
 
 	fs = test_start_mount(lower_path, mount_path,
 			      &handlers, sizeof(handlers), NULL);
